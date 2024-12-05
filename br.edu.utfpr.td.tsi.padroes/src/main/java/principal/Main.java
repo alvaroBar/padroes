@@ -1,61 +1,50 @@
 package principal;
 
-import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.util.HashMap;
-import java.util.Map;
+import java.text.NumberFormat;
+import java.util.ArrayList;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
-import calculator.ImpostoCalculator;
+import enumeracao.UnidadeFederacao;
+import model.Producao;
 
 public class Main {
+
 	public static void main(String[] args) {
-		ObjectMapper mapper = new ObjectMapper();
 
-		Map<String, BigDecimal> valorTotalPorEstado = new HashMap<>();
-		BigDecimal valorTotalProducao = BigDecimal.ZERO;
-		BigDecimal valorTotalImpostos = BigDecimal.ZERO;
+		ArrayList<Producao> listaProducao = lerArquivoProducao();
 
-		try {
-			ArrayNode producaoArray = (ArrayNode) mapper
-					.readTree(new File("src/main/resources/relatorioProducao.json"));
+		BigDecimal valorTotalProducao = new BigDecimal("0");
+		BigDecimal imposto = new BigDecimal("0");
 
-			for (JsonNode item : producaoArray) {
-				String estado = item.get("localProducao").asText();
-				BigDecimal quantidade = BigDecimal.valueOf(item.get("quantidade").asDouble());
-				BigDecimal valorUnitario = BigDecimal.valueOf(item.get("valorUnitario").asDouble());
-
-				BigDecimal valorTotalItem = quantidade.multiply(valorUnitario);
-
-				valorTotalProducao = valorTotalProducao.add(valorTotalItem);
-
-				valorTotalPorEstado.merge(estado, valorTotalItem, BigDecimal::add);
-			}
-
-			for (Map.Entry<String, BigDecimal> entry : valorTotalPorEstado.entrySet()) {
-				String estado = entry.getKey();
-				BigDecimal valorTotal = entry.getValue();
-
-				BigDecimal imposto = ImpostoCalculator.calcularImposto(estado, valorTotal);
-
-				valorTotalImpostos = valorTotalImpostos.add(imposto);
-
-				System.out.printf("Estado: %s, Valor Total: %.2f, Imposto: %.2f%n", estado, valorTotal, imposto);
-			}
-
-			System.out.println("**************************");
-			System.out.println("**************************");
-			System.out.printf("Valor total de impostos: %.2f%n", valorTotalImpostos);
-			System.out.printf("Valor total da produção: %.2f%n", valorTotalProducao);
-
-		} catch (IOException e) {
-			System.err.println("Erro ao ler o arquivo JSON: " + e.getMessage());
-		} catch (IllegalArgumentException e) {
-			System.err.println("Erro: " + e.getMessage());
+		for (Producao producao : listaProducao) {
+			UnidadeFederacao uf = producao.getUf();
+			imposto = imposto.add(uf.calcularImposto(producao));
+			valorTotalProducao = valorTotalProducao
+					.add(producao.getValorUnitario().multiply(new BigDecimal(producao.getQuantidade())));
 		}
+
+		String valorImpostoFormatado = NumberFormat.getCurrencyInstance().format(imposto);
+		System.out.println(String.format("Valor total de impostos: %s", valorImpostoFormatado));
+
+		String valorTotalProducaoFormatado = NumberFormat.getCurrencyInstance().format(valorTotalProducao);
+		System.out.println(String.format("Valor total da produção: %s", valorTotalProducaoFormatado));
+	}
+
+	private static ArrayList<Producao> lerArquivoProducao() {
+		ArrayList<Producao> producao = new ArrayList<>();
+		Gson gson = new Gson();
+		try (FileReader reader = new FileReader(
+				"/home/pitica/git/repository/br.edu.utfpr.td.tsi.padroes/src/main/resources/relatorioProducao.json")) {
+			producao = gson.fromJson(reader, new TypeToken<ArrayList<Producao>>() {
+			}.getType());
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		return producao;
 	}
 }
